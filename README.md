@@ -10,4 +10,4 @@ _Desde las sombras de la ignorancia en R dos alumnas de la UNGS intentaran prese
 * Dr. Pablo Etchemendy
 * Dr. Ignacio Spiousas
 
-# Estudio: _Crecimiento de Pseudomonas en medio con concentraciones elevadas de tiocianato
+# Estudio: _Crecimiento de Pseudomonas en medio con concentraciones elevadas de tiocianato_
