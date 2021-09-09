@@ -1,0 +1,273 @@
+---
+title: "Crecimiento de _Pseudomonas_ en medio con concentraciones elevadas de tiocianato"
+author: "Paulina Cordoba, Yohana Yisel Dutra Alcoba"
+date: "8/30/2021"
+output:
+  html_document:
+    code_folding: show
+    theme: paper
+    highlight: pygments
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Resumen
+
+En el presente trabajo proponemos realizar un análisis estadístico utilizando el programa Rstudio. Se utilizarán datos obtenidos a partir de un ensayo de medidas repetidas con reactores batch inoculados con microorganismos aislados de zonas del área de influencia minera.
+
+El objetivo general del trabajo es analizar la capacidad de crecimiento de bacterias, aisladas de un área cercana a la mina Veladero en San Juan, cuando están bajo estrés al someterlas a concentraciones altas de tiocianato. 
+Si estas bacterias son capaces de resistir esas concentraciones en el futuro podrían evaluarse las estrategias que estos microorganismos utilizan para crecer en ese ambiente hostil y luego poder analizar potenciales aplicaciones en procesos de biorremediación. 
+
+Para esto decidimos estudiar el crecimiento de  bacterias de tres cepas de _Pseudomonas_  diferentes identificadas como cepa 30, 17 y 73 durante tres días consecutivos. 
+La hipótesis que queremos probar es que la densidad óptica asociada al crecimiento bacteriano varía con el tiempo de incubación en presencia de las cepas 30, 17 y 73.
+
+Se prepararon dos juegos de Erlenmeyers con 20 ml de medio de cultivo fresco M9 con SCN-Cl- 25 mM y se agregaron inóculos estandarizados por densidad óptica (DO600) de las cepas 30,17 y 73 cada uno por triplicado. Se incubaron a 20 ºC  y se tomaron alícuotas del medio de cultivo a diferentes tiempos, luego se determinó espectrofotométricamente el crecimiento. En el set de datos también se encuentran incluidos los valores obtenidos con un juego de triplicado de los blancos de control, los cuales fueron preparados en las misma condiciones que el ensayo mencionado sin el agregado del inóculo bacteriano.
+
+## Estructura de los datos
+
+
+Lectura de los datos desde el archivo. Se observa que los datos están en columnas, necesitamos convertirlos en tidy data.
+```{r}
+crecimiento_csv <- read.csv("./crecimiento.csv")
+crecimiento_csv %>%
+  head(3)
+```
+
+
+Convertir datos en tidy data usando pivot, para que sea posible analizar
+```{r}
+crecimiento <- crecimiento_csv %>% 
+  pivot_longer(c(
+    "X30.AN", "X30.BN"  , "X30.CN",
+    "X73.AN", "X73.BN", "X73.CN",
+    "X17.AN", "X17.BN", "X17.CN",
+    "BCO.A" , "BCO.B" , "BCO.C", "BCO.D"
+  ),
+  names_to = "replicas", values_to = "DO")
+```
+
+
+Se seleccionan las columnas utiles
+```{r}
+crecimiento <- crecimiento %>% 
+  select(c("horas.de.ensayo", "replicas", "DO"))
+```
+
+Se eliminan los datos sin valores
+```{r}
+crecimiento <- crecimiento %>% 
+  filter(!is.na(DO))
+```
+
+Una pequeña muestra de los datos
+```{r}
+crecimiento %>%
+  arrange(replicas) %>%
+  head(5)
+```
+
+### Describir brevemente los datos (tidy data):
+
+
+-   Cuántas variables tienen?
+```{r}
+crecimiento %>%
+  group_by(replicas) %>%
+  summarise() %>%
+  head(22)
+
+
+```
+
+
+-   De qué tipo es cada variable?
+```{r}
+crecimiento %>%
+  select(c(DO)) %>%
+  sapply(typeof)
+```
+
+
+-   Cuántas observaciones?
+```{r}
+crecimiento %>%
+  summarise(total = n())
+```
+
+## breve análisis exploratorio.
+
+
+Columnas, tipo de datos, total de filas y algunos datos de cada columna
+```{r}
+str(crecimiento)
+```
+
+
+DO en función de horas de ensayo
+```{r}
+crecimiento %>% ggplot(aes(x = horas.de.ensayo,
+                           y = DO,
+                           color=replicas)) +
+  geom_point()
+
+```
+
+Promedio, desvio y mediana para las cepas y el control
+```{r}
+crecimiento_agrupado <- crecimiento %>%
+  group_by(horas.de.ensayo, cepas = substring(replicas, 0, 3)) %>%
+  summarise(desvio = sd(DO), promedio = mean(DO), mediana = median(DO))
+```
+
+Gráfica de promedio de las cepas y el control
+```{r}
+crecimiento_agrupado %>%
+  ggplot(aes(x = horas.de.ensayo,
+             y = promedio,
+             color=cepas)) +
+  geom_point() +
+  geom_line()
+```
+
+
+
+```{r}
+crecimiento_agrupado %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  scale_shape_manual(values=c(15, 16, 17,18))+
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  theme_light()
+```
+
+
+
+```{r}
+crecimiento_agrupado %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  scale_shape_manual(values=c(15, 16, 17,18))+
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  theme_light()
+```
+
+
+```{r}
+crecimiento_agrupado %>%
+  filter(cepas == 'BCO') %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  theme_light()
+```
+
+```{r}
+crecimiento_agrupado %>%
+  filter(cepas == 'X17' & horas.de.ensayo < 65) %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  theme_light()
+```
+
+```{r}
+crecimiento_agrupado %>%
+  filter(cepas == 'X30' & horas.de.ensayo < 65) %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  theme_light()
+```
+
+
+```{r}
+crecimiento_agrupado %>%
+  filter(cepas == 'X73' & horas.de.ensayo < 40) %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  theme_light()
+```
+
+
+
+
+```{r}
+crecimiento_agrupado %>%
+  filter(cepas == 'X30' & horas.de.ensayo < 65) %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  scale_y_log10() +
+  theme_light()
+```
+
+```{r}
+crecimiento_agrupado %>%
+  filter(cepas == 'X73' & horas.de.ensayo < 40) %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas)) + 
+  scale_y_log10() +
+  theme_light()
+```
