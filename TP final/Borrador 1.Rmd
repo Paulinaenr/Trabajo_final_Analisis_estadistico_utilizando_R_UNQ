@@ -153,6 +153,7 @@ crecimiento_agrupado %>%
 
 
 
+
 ```{r}
 crecimiento_agrupado %>%
   ggplot() +
