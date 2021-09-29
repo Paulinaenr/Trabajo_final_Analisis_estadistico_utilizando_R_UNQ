@@ -134,7 +134,6 @@ crecimiento_agrupado %>%
 ```
 
 
-
 ```{r}
 crecimiento_agrupado %>%
   ggplot() +
@@ -144,29 +143,13 @@ crecimiento_agrupado %>%
                  colour = cepas,
                  size=2,
                  alpha = 0.1)) +
-  scale_shape_manual(values=c(15, 16, 17,18))+
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
                 color=cepas, group=cepas)) + 
-  theme_light()
-```
-
-
-
-
-```{r}
-crecimiento_agrupado %>%
-  ggplot() +
-  geom_point(aes(x = horas.de.ensayo,
-                 y = promedio,
-                 shape = cepas,
-                 colour = cepas,
-                 size=2,
-                 alpha = 0.1)) +
   scale_shape_manual(values=c(15, 16, 17,18))+
-  geom_line(aes(x = horas.de.ensayo,
-                y = promedio,
-                color=cepas, group=cepas)) + 
+  scale_color_manual(values=c("#f8766d", "#05bfc4", "#609cff", "#c77cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   theme_light()
 ```
 
@@ -184,6 +167,10 @@ crecimiento_agrupado %>%
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
                 color=cepas, group=cepas)) + 
+  scale_shape_manual(values=c(15))+
+  scale_color_manual(values=c("#f8766d")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   theme_light()
 ```
 
@@ -200,6 +187,10 @@ crecimiento_agrupado %>%
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
                 color=cepas, group=cepas)) + 
+  scale_shape_manual(values=c(16))+
+  scale_color_manual(values=c("#05bfc4")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   theme_light()
 ```
 
@@ -215,7 +206,12 @@ crecimiento_agrupado %>%
                  alpha = 0.1)) +
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
-                color=cepas, group=cepas)) + 
+                color=cepas, group=cepas),
+                 color = "lightblue") + 
+  scale_shape_manual(values=c(17))+
+  scale_color_manual(values=c("#609cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   theme_light()
 ```
 
@@ -233,15 +229,24 @@ crecimiento_agrupado %>%
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
                 color=cepas, group=cepas)) + 
+  scale_shape_manual(values=c(18))+
+  scale_color_manual(values=c("#c77cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   theme_light()
 ```
 
 
-
+TODO: Explicar
 
 ```{r}
 crecimiento_agrupado %>%
-  filter(cepas == 'X30' & horas.de.ensayo < 65) %>%
+  filter(
+    (cepas == 'BCO') |
+    (cepas == 'X17' & horas.de.ensayo < 65) |
+    (cepas == 'X30' & horas.de.ensayo < 65) |
+    (cepas == 'X73' & horas.de.ensayo < 40)
+  ) %>%
   ggplot() +
   geom_point(aes(x = horas.de.ensayo,
                  y = promedio,
@@ -251,14 +256,55 @@ crecimiento_agrupado %>%
                  alpha = 0.1)) +
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
-                color=cepas, group=cepas)) + 
-  scale_y_log10() +
+                color=cepas, group=cepas)) +
+  scale_shape_manual(values=c(15,16,17,18))+
+  scale_color_manual(values=c("#f8766d", "#05bfc4", "#609cff", "#c77cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   theme_light()
 ```
 
+
+
+
+
+
+
+
+
+
+AJUSTADO
+
 ```{r}
-crecimiento_agrupado %>%
-  filter(cepas == 'X73' & horas.de.ensayo < 40) %>%
+ajuste_17 <- crecimiento_agrupado %>%
+  filter(cepas == 'BCO' | cepas == 'X17') %>%
+  group_by(horas.de.ensayo) %>%
+  mutate(ajuste = sum(c(promedio))) %>%
+  filter(cepas == 'X17')
+
+ajuste_30 <- crecimiento_agrupado %>%
+  filter(cepas == 'BCO' | cepas == 'X30') %>%
+  group_by(horas.de.ensayo) %>%
+  mutate(ajuste = sum(c(promedio))) %>%
+  filter(cepas == 'X30')
+
+ajuste_73 <- crecimiento_agrupado %>%
+  filter(cepas == 'BCO' | cepas == 'X73') %>%
+  group_by(horas.de.ensayo) %>%
+  mutate(ajuste = sum(c(promedio))) %>%
+  filter(cepas == 'X73')
+
+crecimiento_ajustado = ajuste_17 %>% ungroup() %>% add_row(ajuste_30) %>% add_row(ajuste_73)
+```
+TODO: Explicar cortado
+
+```{r}
+crecimiento_ajustado %>%
+  filter(
+    (cepas == 'X17' & horas.de.ensayo < 65) |
+    (cepas == 'X30' & horas.de.ensayo < 65) |
+    (cepas == 'X73' & horas.de.ensayo < 40)
+  ) %>%
   ggplot() +
   geom_point(aes(x = horas.de.ensayo,
                  y = promedio,
@@ -268,7 +314,38 @@ crecimiento_agrupado %>%
                  alpha = 0.1)) +
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
-                color=cepas, group=cepas)) + 
+                color=cepas, group=cepas)) +
+  scale_shape_manual(values=c(16,17,18))+
+  scale_color_manual(values=c("#05bfc4", "#609cff", "#c77cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
+  theme_light()
+```
+
+TODO: explicar
+```{r}
+crecimiento_ajustado %>%
+  filter(
+    (cepas == 'X17' & horas.de.ensayo < 65) |
+    (cepas == 'X30' & horas.de.ensayo < 65) |
+    (cepas == 'X73' & horas.de.ensayo < 40)
+  ) %>%
+  ggplot() +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = promedio,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = promedio,
+                color=cepas, group=cepas))  +
+  scale_shape_manual(values=c(16,17,18))+
+  scale_color_manual(values=c("#05bfc4", "#609cff", "#c77cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
   scale_y_log10() +
   theme_light()
 ```
+
+
