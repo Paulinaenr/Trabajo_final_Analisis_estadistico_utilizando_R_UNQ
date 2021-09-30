@@ -1,0 +1,369 @@
+---
+title: "Crecimiento de _Pseudomonas_ en medio con concentraciones elevadas de tiocianato"
+author: "Paulina Cordoba, Yohana Yisel Dutra Alcoba"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    theme: paper
+    highlight: pygments
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  echo = TRUE, 
+  eval = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
+```
+## Carga de bibliotecas
+```{r, echo=TRUE, eval=TRUE}
+library(magrittr)
+library(purrr)
+library(tidyverse)
+library(nlme)
+library(Routliers)
+library(corrplot)
+```
+
+## Resumen
+
+<div class=text-justify>
+En el presente trabajo proponemos realizar un análisis estadístico utilizando el programa Rstudio. Se utilizarán datos obtenidos a partir de un ensayo de medidas repetidas con reactores batch inoculados con microorganismos aislados de zonas del área de influencia minera.
+
+El objetivo general del trabajo es analizar la capacidad de crecimiento de bacterias, aisladas de un área cercana a la mina Veladero en Provincia de San Juan, cuando están bajo estrés al someterlas a concentraciones altas de tiocianato. 
+Si estas bacterias son capaces de resistir esas concentraciones en el futuro podrían evaluarse las estrategias que estos microorganismos utilizan para crecer en ese ambiente hostil y luego poder analizar potenciales aplicaciones en procesos de biorremediación. 
+
+Para esto decidimos estudiar el crecimiento de  bacterias de tres cepas de _Pseudomonas_  diferentes identificadas como cepa 30, 17 y 73 durante tres días consecutivos. 
+
+Se agregaron por separado inóculos estandarizados por densidad óptica (DO600) de las tres cepas (30, 17 y 73) en Erlenmeyers con 20 ml de medio de cultivo fresco M9 con SCN-Cl- 25 mM,  cada uno por triplicado. Se incubaron a 20 ºC  y se tomaron alícuotas del medio de cultivo a diferentes tiempos, luego se determinó espectrofotométricamente el crecimiento. 
+Ademas, se realizaron blancos control por cuatriplicado que fueron preparados en las misma condiciones que el ensayo mencionado sin el agregado del inóculo bacteriano.
+ **La hipótesis que queremos probar es que la densidad óptica asociada al crecimiento bacteriano en un medio de cultivo con SCN^- varía con el tiempo de incubación**
+</div>
+
+
+## 1 - Pretratamiento de datos
+
+Lectura de los datos desde el archivo. 
+Utilizamos el archivo `crecimiento_base.csv` 
+```{r}
+crecimiento_cepas_csv <- read.csv("./crecimiento_base.csv")
+crecimiento_cepas_csv %>%
+  head()
+```
+
+Se observa que la base de datos original se encuentra en formato messy. Por lo que el primer tratamiento es convertir los datos a formato tidy data usando pivot.
+
+```{r}
+crecimiento_tidy <- crecimiento_cepas_csv %>% 
+  pivot_longer(c(
+    "X30.AN", "X30.BN"  , "X30.CN",
+    "X73.AN", "X73.BN", "X73.CN",
+    "X17.AN", "X17.BN", "X17.CN",
+    "BCO.A" , "BCO.B" , "BCO.C", "BCO.D"
+  ),
+  names_to = "replicas", values_to = "DO")
+crecimiento_tidy 
+```
+
+## 2 - Analisis exploratorio de datos 1
+
+Se observa en este *dataset* las siguientes columnas:
+
+- `tiempo`: el orden temporal de las medidas repetidas a lo largo del tiempo.
+- `horas de ensayo`: el tiempo de incubación transcurrido expresado en horas
+- `replicas`: Detalle de la replica de cada cepa medida
+- `DO`: Concentración bacteriana medida a través de la densidad optica.
+
+Usamos las funcion `summary()` para ver qué estructura y qué tipos de variables tiene nuestro dataset 
+
+```{r}
+summary(crecimiento_tidy)
+str(crecimiento_tidy)
+summarise(crecimiento_tidy, total = n())
+```
+
+Observamos que tenemos tres variables númericas: una entera (`tiempo`) y dos dobles (`horas de ensayo` y `DO`), y una variable de caracteres (`replicas`). El número total de observaciones es de 156.
+Ademas observamos que en la variable `DO` hay un valor `NA`.
+A simple vista no observamos valores que nos llamen la atención.
+
+## 3 - Tratamiento de datos
+
+Dado que la columna `horas de ensayo` ya tiene implicito un orden temporal, se considera que no es necesario la columna `tiempo`
+
+```{r}
+crecimiento_tidy1 <- crecimiento_tidy %>% 
+  select(c("horas.de.ensayo", "replicas", "DO"))
+```
+
+Por otro lado, para un analisis posterior pensamos que es necesario distinguir el tipo de cepa (X17, X30, X73 y blanco) del número de replica (A,B y C). Por ello se agrega una columna al número de replica.
+```{r}
+crecimiento_tidy2<- crecimiento_tidy1 %>%
+separate(replicas, c("cepas", "replicas"))%>%
+mutate(replicas=case_when(replicas=="AN"~"A", replicas=="A"~"A", replicas=="BN"~"B", replicas=="B"~"B", replicas=="CN"~"C", replicas=="C"~"C", replicas=="D"~"D"))
+```
+
+Se eliminan los datos sin valores
+```{r}
+crecimiento_def <- crecimiento_tidy2 %>% 
+  filter(!is.na(DO))
+```
+
+Una pequeña muestra de los datos
+```{r}
+crecimiento_def %>%
+  head(5)
+```
+
+Entonces en el dataset definitivo nos quedan dos variables númericas continuas que son: `Horas de ensayo` y `DO` y dos variables categoricas que son: `cepas` y `replicas`
+
+## 4 - Analisis exploratorio de datos 2
+
+**Distribucion.** 
+Iniciamos explorando la distribucion de las replicas por tipo de cepas.
+
+```{r}
+plot1<-ggplot(crecimiento_def, aes(x = DO)) +
+geom_histogram()+
+facet_grid(cepas~.)
+plot1
+
+
+```
+
+**Covariacion.**
+Luego, exploramos la relación que hay entre la capacidad de crecimiento bacteriana en función del tiempo.
+```{r}
+plot1<-ggplot(crecimiento_def, aes(x = horas.de.ensayo,
+                           y = DO,
+                           color=cepas)) +
+geom_point(alpha=0.5)+
+labs(title = "Crecimiento bacteriano en función del tiempo de incubación", x="tiempo de incubacion (hs)", y="Crecimiento bacteriano (densidad optica)")+
+  theme_light()
+plot1
+```
+
+En el grafico podemos observar que hay una relacion entre la capacidad de crecimiento bacteriana y las horas de ensayo transcurridas. A medida que pasa el tiempo aumenta -de forma diferente- el cremiento bacteriano de cada cepa, excepto del control.
+
+**Outliers.**
+Para analizar los outliers visualizamos el crecimiento bacteriano de las cepas de forma separada. 
+
+```{r}
+#Armamos un tibble con los datos estadisticos
+crecimiento_est_sin_crtl<-crecimiento_def %>%
+  filter(cepas %in% c("X17", "X30", "X73")) %>%
+  group_by(horas.de.ensayo, cepas) %>%
+summarise(M = mean(DO), S = sd(DO), n = n(), .groups="keep") 
+crecimiento_est_sin_crtl
+
+#generamos un grafico para su analisis
+plot2<-ggplot(crecimiento_est_sin_crtl) +
+  geom_point(aes(x = horas.de.ensayo,
+                 y = M,
+                 shape = cepas,
+                 colour = cepas,
+                 size=2,
+                 alpha = 0.1)) +
+  geom_line(aes(x = horas.de.ensayo,
+                y = M,
+                color=cepas, group=cepas)) + 
+  scale_shape_manual(values=c(15, 16, 17))+
+  scale_color_manual(values=c("#f8766d", "#008f4c", "#609cff")) +
+  scale_alpha(guide = 'none') + 
+  scale_size(guide = 'none') + 
+  theme_light()
+plot2
+
+#generamos un grafico por tipo de cepa
+plot3<-ggplot(crecimiento_est_sin_crtl, aes(
+  x = horas.de.ensayo,
+  y = M,
+  color=cepas)) +
+geom_point(alpha=0.5)+
+  scale_color_manual(values=c("#f8766d", "#008f4c", "#609cff"))+
+geom_errorbar(aes(ymax=M+S, ymin=M-S))+ #VER SI ESTA BIEN PLANTEADA LA BARRA DE ERROR
+geom_line(linetype=3)+
+facet_grid(~cepas)+
+labs(title = "Crecimiento medio bacteriano en función del tiempo de incubación", x="tiempo de incubacion (hs)", y="Crecimiento bacteriano medio (densidad optica)")+
+theme(legend.position="none")
+plot3
+```
+
+Observamos en el grafico que la cepa X73 presenta outliers que tienen una explicación experimental. Para los tiempos mayores a 40 horas se produjo una aglomeracion celular debido a un crecimiento bacterial mayor que no pudo ser medido con el metodo elegido. 
+Esto mismo se observa para las ultimas horas de incubacion de las otras cepas (X17 y X30)
+
+Por tal motivo se establece la deteccion outliers segun el criterio arriba expuesto.
+
+```{r}
+#Armamos un tibble con los datos estadisticos sin outlier
+crecimiento_def_sin_outliers <-crecimiento_def %>%
+filter((cepas == 'BCO' & horas.de.ensayo >0) |
+    (cepas == 'X17' & horas.de.ensayo < 65 & horas.de.ensayo >0) |
+    (cepas == 'X30' & horas.de.ensayo < 65 & horas.de.ensayo >0) |
+    (cepas == 'X73' & horas.de.ensayo < 40 & horas.de.ensayo >0))
+crecimiento_def_sin_outliers 
+
+crecimiento_est_sin_crtl<-crecimiento_def_sin_outliers %>%
+  filter(cepas %in% c("X17", "X30", "X73")) %>%
+  group_by(horas.de.ensayo, cepas) %>%
+summarise(M = mean(DO), S = sd(DO), n = n(), .groups="keep") 
+
+plot4 <- ggplot(crecimiento_est_sin_crtl, aes(
+  x = horas.de.ensayo,
+  y = M,
+  color=cepas)) +
+geom_point(alpha=0.5)+
+geom_errorbar(aes(ymax=M+S, ymin=M-S))+ #VER SI ESTA BIEN PLANTEADA LA BARRA DE ERROR
+geom_line(linetype=3)+
+facet_grid(~cepas)+
+labs(title = "Crecimiento medio bacteriano en función del tiempo de incubación", x="tiempo de incubacion (hs)", y="Crecimiento bacteriano medio (densidad optica)")+
+theme(legend.position="none")
+plot4
+```
+
+## 5 - Tratamiento estadistico
+
+
+**Linealidad**
+El crecimiento bacteriano observado muestra un crecimiento exponenecial. Lo primero que realizaremos es una transformacion de nuestros datos para poder ajustar su analisis a un modelo lineal. 
+
+```{r}
+crecimiento_transformado <- 
+  mutate(crecimiento_def_sin_outliers, logDO= log(DO+1))
+crecimiento_transformado
+
+crecimiento_est_transformado<-crecimiento_transformado %>%
+  filter(cepas %in% c("X17", "X30", "X73")) %>%
+  group_by(horas.de.ensayo, cepas) %>%
+summarise(M = mean(logDO), S = sd(logDO), n = n(), .groups="keep") 
+
+plot5 <- ggplot(crecimiento_est_transformado, aes(
+  x = horas.de.ensayo,
+  y = M,
+  color=cepas)) +
+geom_point(alpha=0.5)+
+#geom_errorbar(aes(ymax=M+S, ymin=M-S))+ #VER SI ESTA BIEN PLANTEADA LA BARRA DE ERROR
+geom_line(linetype=3)+
+facet_grid(~cepas)+
+labs(title = "Crecimiento medio bacteriano en función del tiempo de incubación", x="tiempo de incubacion (hs)", y="Crecimiento bacteriano medio (densidad optica)")+
+theme(legend.position="none")
+plot5
+
+```
+
+Los datos tratados se tratan de medidas longitudinales por lo que el modelo que vamos aplicar para su analisis es de **modelos lineales de efectos mixtos**
+Nuestra unidad de analisis son muestras bacterianas. Estas unidades miden el crecimiento bacteriano medido por densidad optica a lo largo del tiempo.
+Se considera que el tiempo es un factor fijo por que fue elegido de forma intencional y las alícuotas del medio de cultivo como un factor aleatorio que fueron elegidas azarosamente de una población. 
+
+Blancos
+Lo primero que analizamos son los controles. Corroboramos que las cepas control (sin bacterias) no tienen una dependencia en su crecimiento a lo largo del tiempo.
+
+```{r}
+#Aramamos un tibble solo con los datos de unidades control
+
+crecimiento_BCO <- crecimiento_def_sin_outliers %>%
+  filter(cepas =="BCO" & horas.de.ensayo != 44.60) %>%
+  mutate(DO2=case_when(DO<0 ~DO*0, DO>0 ~DO*1))
+crecimiento_BCO
+```
+
+```{r}
+plot6 <- ggplot(crecimiento_BCO, aes(x=horas.de.ensayo, y=DO2, group=replicas, color=replicas))+
+  geom_line()+
+  geom_point() +
+  labs(title = "Muestras control en función del tiempo de incubación", x="tiempo de incubacion (hs)", y="Crecimiento bacteriano medio (densidad optica)")
+plot6
+```
+
+```{r}
+#modelbco.lme <- lme(DO2 ~ horas.de.ensayo , random= ~ horas.de.ensayo | replicas, data=crecimiento_BCO)
+#summary(modelbco.lme)
+```
+
+Acepto H0 que afirma que no hay dependencia entre el crecimiento bacterial y el tiempo transcurrido.
+
+Luego restamos los blancos a la linea de base
+
+```{r}
+#REVEER
+#ajuste_17 <- crecimiento_def_sin_outliers %>%
+  #filter(cepas == 'BCO' | cepas == 'X17') %>%
+  #group_by(horas.de.ensayo) %>%
+  #mutate(ajuste = sum(c(promedio))) %>%
+  #filter(cepas == 'X17')
+
+#ajuste_30 <- crecimiento_agrupado %>%
+ # filter(cepas == 'BCO' | cepas == 'X30') %>%
+  #group_by(horas.de.ensayo) %>%
+  #mutate(ajuste = sum(c(promedio))) %>%
+  #filter(cepas == 'X30')
+
+#ajuste_73 <- crecimiento_agrupado %>%
+  #filter(cepas == 'BCO' | cepas == 'X73') %>%
+  #group_by(horas.de.ensayo) %>%
+  #mutate(ajuste = sum(c(promedio))) %>%
+  #filter(cepas == 'X73')
+
+#crecimiento_ajustado = ajuste_17 %>% ungroup() %>% add_row(ajuste_30) %>% add_row(ajuste_73)
+```
+
+**Modelo de efectos mixtos**
+
+El nuevo modelo será
+
+$$y_{ij} = \beta + b_i + \epsilon_{ij}$$
+
+donde:
+
+- $\beta$ es (una estimación de) el crecimiento medio bacterial sobre la poblacion de bacterias.
+- $b_i$ es (una realizacion de) una variable aleatoria que representa la variabilidad de cada muestra bacteriana presente en nuestra muestra respecto a la poblacion de bacterias.
+- y $\epsilon_{ij}$ es lo mismo de siempre.
+
+variables aleatorias:
+
+- La variabilidad en la población de bacterias: $b_i = N(0, \sigma_b)$.
+- La variabilidad en las mediciones para cada muestra bacteriana, dentro de la población: $\epsilon_ij = N(0, \sigma)$.
+
+**Cepa X17**
+Modelo lineal de efectos mixtos aplicando ordenadas y pendientes aleatorias.
+
+```{r}
+#Armamos el tibble de la cepa correspondiente
+crecimiento_transformado_17 <- crecimiento_transformado %>%
+  filter(cepas == "X17")
+```
+
+```{r}
+#Graficamos
+plot7 <- ggplot(crecimiento_transformado_17, aes(x=horas.de.ensayo, y=logDO, group=replicas, color=replicas)) +
+  geom_point()+
+  geom_line()
+plot7
+```
+
+```{r}
+#Aplicamos el modelo
+#modelx17.lme <- lme(logDO~horas.de.ensayo , random= ~horas.de.ensayo|replicas,  data=crecimiento_transformado_17) #lo hago con el transformado? me salta un error cuando lo hago con log
+#summary(modelx17.lme)
+```
+
+```{r}
+#Agregamos al tibble las predicciones y los residuos
+#crecimiento_transformado_17 %<>% mutate(pred= predict(modelx17.lme, level=1), res = resid(modelx17.lme, level=1))
+#crecimiento_transformado_17 
+```
+
+```{r}
+#Graficamos las predicciones y los residuos
+#plot8 <- ggplot(crecimiento_transformado_17, aes(x=horas.de.ensayo, group=replicas)) +
+# geom_line(aes(y=logDO, color=replicas))+
+#  geom_point(aes(y=logDO, color=replicas))+
+#  geom_line(aes(y=pred))
+# plot8
+```
+
+
