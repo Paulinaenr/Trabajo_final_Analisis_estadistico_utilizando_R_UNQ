@@ -32,7 +32,7 @@ Se prepararon dos juegos de Erlenmeyers con 20 ml de medio de cultivo fresco M9 
 
 Lectura de los datos desde el archivo. Se observa que los datos están en columnas, necesitamos convertirlos en tidy data.
 ```{r}
-crecimiento_csv <- read.csv("./crecimiento.csv")
+crecimiento_csv <- read.csv("./crecimiento_corregido.csv")
 crecimiento_csv %>%
   head(3)
 ```
@@ -324,6 +324,13 @@ crecimiento_ajustado %>%
 
 TODO: explicar
 ```{r}
+m3.lme = lme(promedio ~ horas.de.ensayo, random = ~ horas.de.ensayo - 1|cepas, data = crecimiento_ajustado)
+
+crecimiento_ajustado = crecimiento_ajustado %>% mutate(pred_m = predict(m3.lme, level = 1))
+
+```
+
+```{r}
 crecimiento_ajustado %>%
   filter(
     (cepas == 'X17' & horas.de.ensayo < 65) |
@@ -340,6 +347,7 @@ crecimiento_ajustado %>%
   geom_line(aes(x = horas.de.ensayo,
                 y = promedio,
                 color=cepas, group=cepas))  +
+  geom_line(aes(x = horas.de.ensayo, y = pred_m, color=cepas, group=cepas))  +
   scale_shape_manual(values=c(16,17,18))+
   scale_color_manual(values=c("#05bfc4", "#609cff", "#c77cff")) +
   scale_alpha(guide = 'none') + 
